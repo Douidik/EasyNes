@@ -1,3 +1,5 @@
+.cache
+Binaries
 
 # Created by https://www.toptal.com/developers/gitignore/api/emacs,cmake
 # Edit at https://www.toptal.com/developers/gitignore?templates=emacs,cmake
