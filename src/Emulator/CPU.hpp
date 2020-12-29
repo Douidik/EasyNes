@@ -106,7 +106,7 @@ class CPU {
   void TransferOperation(u8 &source, u8 &destination);
 
  public:
-  // to keep all inlined and simple to read we momentarily clang format
+  // to keep all inlined and simple to read we momentarily disable clang format
   // clang-format off
 
   inline void ADC(u8 *operand) { m_A = AddOperation(*operand); }
