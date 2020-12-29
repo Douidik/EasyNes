@@ -13,6 +13,8 @@ struct Instruction {
   void (CPU::*operation)(u8*) = &CPU::ILL;
 };
 
+// clang-format off
+  
 constexpr Instruction INSTRUCTION_SET[256] = {
     [0x69] = {2, &CPU::IMM, &CPU::ADC}, [0x65] = {3, &CPU::ZER, &CPU::ADC},
     [0x75] = {4, &CPU::ZPX, &CPU::ADC}, [0x6D] = {4, &CPU::ABS, &CPU::ADC},
@@ -35,7 +37,7 @@ constexpr Instruction INSTRUCTION_SET[256] = {
 
     [0xD0] = {2, &CPU::REL, &CPU::BNE}, [0x10] = {2, &CPU::REL, &CPU::BPL},
 
-    [0x00] = {7, &CPU::IMP, &CPU::BNE},
+    [0x00] = {7, &CPU::IMP, &CPU::BRK},
 
     [0x50] = {2, &CPU::REL, &CPU::BVC}, [0x70] = {2, &CPU::REL, &CPU::BVS},
 
@@ -63,8 +65,8 @@ constexpr Instruction INSTRUCTION_SET[256] = {
     [0x5D] = {4, &CPU::ABX, &CPU::EOR}, [0x59] = {4, &CPU::ABY, &CPU::EOR},
     [0x41] = {6, &CPU::IDX, &CPU::EOR}, [0x51] = {5, &CPU::IDY, &CPU::EOR},
 
-    [0xE6] = {5, &CPU::ZER, &CPU::DEC}, [0xF6] = {6, &CPU::ZPX, &CPU::DEC},
-    [0xEE] = {6, &CPU::ABS, &CPU::DEC}, [0xFE] = {7, &CPU::ABX, &CPU::DEC},
+    [0xE6] = {5, &CPU::ZER, &CPU::INC}, [0xF6] = {6, &CPU::ZPX, &CPU::INC},
+    [0xEE] = {6, &CPU::ABS, &CPU::INC}, [0xFE] = {7, &CPU::ABX, &CPU::INC},
 
     [0xE8] = {2, &CPU::IMP, &CPU::INX}, [0xC8] = {2, &CPU::IMP, &CPU::INY},
 
@@ -134,5 +136,7 @@ constexpr Instruction INSTRUCTION_SET[256] = {
     [0x9A] = {2, &CPU::IMP, &CPU::TXS}, [0x98] = {2, &CPU::IMP, &CPU::TYA}};
 
 }  // namespace EasyNes
+
+// clang-format on
 
 #endif  // EASYNES_INSTRUCTIONS_HPP

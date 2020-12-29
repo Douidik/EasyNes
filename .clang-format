@@ -1,1 +1,9 @@
 BasedOnStyle: Google
+
+AlignConsecutiveAssignments: 'true'
+AlignConsecutiveDeclarations: 'true'
+AlignOperands: 'true'
+AlignTrailingComments: 'true'
+AllowShortLambdasOnASingleLine: All
+ColumnLimit: '500'
+UseTab: Never

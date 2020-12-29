@@ -1,52 +1,45 @@
 #include "CPU.hpp"
 
+#include <iostream>
 #include <utility>
 
-#include "Instructions.hpp"
 #include "Core.hpp"
+#include "Instructions.hpp"
 
 namespace EasyNes {
 
-constexpr u8 NEGATIVE_BIT = 0b10000000;
-constexpr u16 STACK_BASE = 0x0100;
-constexpr u16 IRQ_VECTOR = 0xFFFE;
-constexpr u16 RST_VECTOR = 0xFFFC;
-constexpr u16 NMI_VECTOR = 0xFFFA;
-constexpr u16 PAGE_SIZE = 256;
-
 constexpr u16 BATCH_BYTES(u8 lo, u8 hi) { return (hi << 8) | lo; }
 
-constexpr std::pair<u8, u8> DECOMPOSE_WORD(u16 value) {
-  return {(value >> 8), value | 0x00FF};
-}
+constexpr std::pair<u8, u8> DECOMPOSE_WORD(u16 value) { return {(value >> 8), value | 0x00FF}; }
 
 constexpr bool IS_NEGATIVE(u8 value) { return value & NEGATIVE_BIT; }
 
-constexpr bool HAS_OVERFLOWED(u8 a, u8 b, u16 result) {
-  return ~(a ^ b) & IS_NEGATIVE(a ^ result);
-}
+constexpr bool HAS_OVERFLOWED(u8 a, u8 b, u16 result) { return ~(a ^ b) & IS_NEGATIVE(a ^ result); }
 
 CPU::CPU(Core *core) : m_Core(core) {}
 
-void CPU::Step() {
+bool CPU::Step() {
   // If the cpu don't have to wait more cycles we can perform the next instruction
-  if(m_RemainingCycles-- <= 0) {
-    u8 opcode = *FetchByte(m_PC++);
+  if (m_WaitingCycles-- == 0) {
+    u8          opcode      = *FetchByte(m_PC++);
     Instruction instruction = INSTRUCTION_SET[opcode];
 
     // Execute the instruction
     u8 *data = (this->*instruction.addressing)();
     (this->*instruction.operation)(data);
 
-    m_RemainingCycles += instruction.cycles;
+    m_WaitingCycles += instruction.cycles;
+    m_ElapsedInstructions++;
+    return true;
   }
+  return false;
 }
 
 u8 *CPU::FetchByte(u16 address) { return &m_Core->ram[address]; }
 
 u8 *CPU::PushByte(u8 value) {
   u8 *data = FetchByte(STACK_BASE + m_SP--);
-  *data = value;
+  *data    = value;
   return data;
 }
 
@@ -61,7 +54,7 @@ u16 CPU::PushWord(u16 value) {
 
 u16 CPU::PullWord() { return BATCH_BYTES(*PullByte(), *PullByte()); }
 
-void CPU::Interrupt(u16 vector) {
+void CPU::Interrupt(u16 vector, u8 cycles) {
   m_Status.B = 0;
   PushByte(m_Status.value);
   PushWord(m_PC);
@@ -71,21 +64,9 @@ void CPU::Interrupt(u16 vector) {
   u8 hi = *FetchByte(vector + 1);
 
   m_PC = BATCH_BYTES(lo, hi);
+
+  m_WaitingCycles = cycles;
 }
-
-void CPU::IRQ() {
-  if (!m_Status.I) {
-    Interrupt(IRQ_VECTOR);
-  }
-
-  m_RemainingCycles = 7;
-}
-
-void CPU::NMI() {
-  Interrupt(NMI_VECTOR);
-  m_RemainingCycles = 8;
-}
-
 void CPU::RST() {
   u8 lo = *FetchByte(RST_VECTOR);
   u8 hi = *FetchByte(RST_VECTOR + 1);
@@ -93,11 +74,11 @@ void CPU::RST() {
   m_PC = BATCH_BYTES(lo, hi);
 
   m_A = m_X = m_Y = 0x00;
-  m_SP = 0xFD;
-  m_Status.value = 0;
-  m_Status.U = 1;
+  m_SP            = 0xFD;
+  m_Status.value  = 0;
+  m_Status.U      = 1;
 
-  m_RemainingCycles = 8;
+  m_WaitingCycles = 8;
 }
 
 u8 *CPU::IMM() { return FetchByte(m_PC++); }
@@ -126,16 +107,16 @@ u16 CPU::AbsoluteAddressing(u8 offset) {
 
   // Additional cycle if the page is crossed
   if ((hi << 8) != (address & 0xFF00)) {
-    m_RemainingCycles++;
+    m_WaitingCycles++;
   }
 
   return address;
 }
 
 u8 *CPU::IND() {
-  u8 pointerLo = *FetchByte(m_PC++);
-  u8 pointerHi = *FetchByte(m_PC++);
-  u16 pointer = BATCH_BYTES(*FetchByte(pointerLo), *FetchByte(pointerHi));
+  u8  pointerLo = *FetchByte(m_PC++);
+  u8  pointerHi = *FetchByte(m_PC++);
+  u16 pointer   = BATCH_BYTES(*FetchByte(pointerLo), *FetchByte(pointerHi));
 
   u8 lo = *FetchByte(pointer);
   u8 hi = 0;
@@ -174,18 +155,18 @@ u8 CPU::AddOperation(u8 operand) {
 }
 
 void CPU::BitwiseOperation(u8 operand, u8 (*operation)(u8, u8)) {
-  m_A = (*operation)(m_A, operand);
+  m_A        = (*operation)(m_A, operand);
   m_Status.Z = m_A == 0;
   m_Status.N = IS_NEGATIVE(m_A);
 }
 
 void CPU::BranchOperation(bool condition, u8 destination) {
   if (condition) {
-    m_RemainingCycles++;
+    m_WaitingCycles++;
 
     // Additional cycle if page crossed
     if ((m_PC & 0xFF00) != (destination & 0xFF00)) {
-      m_RemainingCycles++;
+      m_WaitingCycles++;
     }
 
     m_PC = destination;
@@ -200,28 +181,33 @@ void CPU::CompareOperation(u8 reg, u8 operand) {
   m_Status.C = difference >= 0;
 }
 
-void CPU::IncrementOperation(u8 *a, bool invert) {
-  s8 b = (invert ? -1 : 1);
-  *a = (*a + b) % 256;
+void CPU::IncrementOperation(u8 *a) {
+  *a         = (*a + 1) % 256;
+  m_Status.Z = *a == 0;
+  m_Status.N = IS_NEGATIVE(*a);
+}
+
+void CPU::DecrementOperation(u8 *a) {
+  *a         = (*a - 1) % 256;
   m_Status.Z = *a == 0;
   m_Status.N = IS_NEGATIVE(*a);
 }
 
 void CPU::LoadOperation(u8 &reg, u8 value) {
-  reg = value;
+  reg        = value;
   m_Status.Z = reg == 0;
   m_Status.N = IS_NEGATIVE(reg);
 }
 
 void CPU::ReturnOperation(u16 offset) {
   m_Status.value = *PullByte();
-  m_PC = PullWord() + offset;
+  m_PC           = PullWord() + offset;
 }
 
 void CPU::TransferOperation(u8 &source, u8 &destination) {
   destination = source;
-  m_Status.N = IS_NEGATIVE(source);
-  m_Status.Z = source == 0;
+  m_Status.N  = IS_NEGATIVE(source);
+  m_Status.Z  = source == 0;
 }
 
 void CPU::ASL(u8 *operand) {
@@ -251,7 +237,7 @@ void CPU::BRK(u8 *) {
 
   u8 lo = *FetchByte(IRQ_VECTOR);
   u8 hi = *FetchByte(IRQ_VECTOR + 1);
-  m_PC = BATCH_BYTES(lo, hi);
+  m_PC  = BATCH_BYTES(lo, hi);
 }
 
 void CPU::JSR(u8 *destination) {
