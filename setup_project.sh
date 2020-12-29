@@ -1,6 +1,8 @@
 #!/bin/sh
+set -e
 
-mkdir cmake && cd cmake
-conan install -b=missing ..
+mkdir -p cmake
+cd cmake
+conan install .. --build=missing
 cd ../
 ./compile.sh

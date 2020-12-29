@@ -1,4 +1,5 @@
 #!/bin/sh
+set -e
 
 # $1: build configuration, defaulted to debug
 configs=${1:-Debug}
@@ -7,4 +8,4 @@ threads=${2:-12}
 
 cmake -DCMAKE_BUILD_TYPE=$configs .
 make -j$threads
-bin/NesTest
+bin/EasyTest

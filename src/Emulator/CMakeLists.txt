@@ -1,2 +1,2 @@
 file(GLOB_RECURSE SOURCE_EMU *.hpp *.cpp)
-add_library(NesEmu STATIC ${SOURCE_EMU})
+add_library(EasyEmu STATIC ${SOURCE_EMU})

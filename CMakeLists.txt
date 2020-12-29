@@ -1,6 +1,6 @@
-project(NesApp)
-project(NesEmu)
-project(NesTest)
+project(EasyApp)
+project(EasyEmu)
+project(EasyTest)
 
 cmake_minimum_required(VERSION 3.17)
 

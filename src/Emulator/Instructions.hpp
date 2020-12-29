@@ -12,8 +12,15 @@ struct Instruction {
   u8* (CPU::*addressing)(void) = &CPU::IMP;
   void (CPU::*operation)(u8*) = &CPU::ILL;
 };
-
+  
 // clang-format off
+
+  
+  // Disable warning for array designator
+#if (__GNUC__ || __clang__)
+  #pragma GCC diagnostic push
+  #pragma GCC diagnostic ignored "-Wc99-designator"
+#endif
   
 constexpr Instruction INSTRUCTION_SET[256] = {
     [0x69] = {2, &CPU::IMM, &CPU::ADC}, [0x65] = {3, &CPU::ZER, &CPU::ADC},
@@ -135,6 +142,11 @@ constexpr Instruction INSTRUCTION_SET[256] = {
     [0xBA] = {2, &CPU::IMP, &CPU::TSX}, [0x8A] = {2, &CPU::IMP, &CPU::TXA},
     [0x9A] = {2, &CPU::IMP, &CPU::TXS}, [0x98] = {2, &CPU::IMP, &CPU::TYA}};
 
+#if (__GNUC__ || __clang__)
+  #pragma GCC diagnostic pop
+#endif
+
+  
 }  // namespace EasyNes
 
 // clang-format on
